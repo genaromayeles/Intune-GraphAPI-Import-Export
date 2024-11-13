@@ -40,6 +40,7 @@ if (-not (Test-Path -Path $location)) {
     exit
 }
 
+
 ###########################
 # Functions for Logging   #
 ###########################
