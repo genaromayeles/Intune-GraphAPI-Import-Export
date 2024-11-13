@@ -102,6 +102,7 @@ try {
         # Convert to JSON for API submission
         $scriptJSON = $scriptContent | ConvertTo-Json -Depth 10
 
+
         # Import the compliance script
         try {
             $response = Invoke-RestMethod -Headers $HeaderParams -Uri "https://graph.microsoft.com/beta/deviceManagement/deviceComplianceScripts" -Method POST -ContentType "application/json" -Body $scriptJSON
