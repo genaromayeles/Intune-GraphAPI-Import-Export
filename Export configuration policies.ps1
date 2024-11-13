@@ -5,10 +5,10 @@ $logFileName = (Get-Date -Format "yyyy-MM-dd_HH-mm")
 $LogFile = "$logfolder\$logFileName.log"
 
 # Hard-coded Client ID and Tenant ID
-$client_Id = "9dc87879-a922-477b-85a7-e8509b49741f"
-$tenant_Id = "f8ff6e6b-7337-47d6-8e7e-f961f8836708"
+$client_Id = "12fsergckkk563344789dgsggdf5f555555sss"
+$tenant_Id = "12fsergckkk563344789dgsggdf5f555555sss"
 $location = "C:\Support\IntuneWorkloadSync"
-$credentialPath = "$location\VUHLSecureClientSecret.txt"
+$credentialPath = "$location\ClientSecret.txt"
 
 # Retrieve encrypted client secret from file
 try {
