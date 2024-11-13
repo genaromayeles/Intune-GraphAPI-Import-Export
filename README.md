@@ -1,2 +1,2 @@
 # Intune-GraphAPI-Import-Export
-this is my folder project for the intune management with Graph API
+Your Intune management project, "Intune-GraphAPI-Import-Export," focuses on enhancing the automation of Intune policy and configuration management using the Graph API. Inspired by the article ["Export / Import Intune Policies and Configuration using Graph API"](https://www.cloudsecuritea.com/2021/09/export-import-intune-policies-and-configuration-using-graph-ap/), you are working to create a streamlined approach for exporting and importing configurations, making policy management more efficient and scalable. This project builds on concepts from the article but adapts them to your unique requirements and goals for Intune administration.
