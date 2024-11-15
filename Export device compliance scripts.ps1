@@ -1,14 +1,13 @@
-﻿# Create logfile
+# Create logfile
 $Purpose = "IntuneWorkloadSync"
 $logfolder = "C:\Support\$Purpose"
 $logFileName = (Get-Date -Format "yyyy-MM-dd_HH-mm")
-$LogFile = "$logfolder\$logFileName.log"
+$LogFile = "$logfolder\Logging\$logFileName.log"
 
 # Hard-coded Client ID and Tenant ID
-$client_Id = "12fsergckkk563344789dgsggdf5f555555sss"
-$tenant_Id = "12fsergckkk563344789dgsggdf5f555555sss"
-$location = "C:\Support\IntuneWorkloadSync"
-$credentialPath = "$location\ClientSecret.txt"
+$client_Id = "sjsjdsksd3sd23s2s55s1s1sd44d1d14d44d"
+$tenant_Id = "22sd54d5df44h55j622w4d1dd12zaq5w2e2e0f"
+$credentialPath = "$logfolder\VUHLSecureClientSecret.txt"
 
 # Retrieve encrypted client secret from file
 try {
@@ -44,16 +43,49 @@ Function Write-Log {
     }
 }
 
-# Function to check for existing files and skip if already exists
+# Function to check if the file exists and modification date matches the policy's last modified date from Graph API
 Function Check-FileExistence {
-    Param ([string]$filePath)
+    Param (
+        [string]$filePath,
+        [string]$scriptId,
+        [string]$token
+    )
+
+    # Get the policy's last modified date using Graph API
+    $uri = "https://graph.microsoft.com/beta/deviceManagement/deviceComplianceScripts/$scriptId"
+    #$policyResponse = Invoke-RestMethod -Uri $uri -Headers @{ "Authorization" = "Bearer $token" } -Method Get
+    $scriptResponse = Invoke-RestMethod -Headers $HeaderParams -Uri $uri -Method Get
+    $scriptModifiedDate = [datetime]$scriptResponse.lastModifiedDateTime
 
     if (Test-Path -Path $filePath) {
-        Write-Log "File already exists: $filePath"
-        Write-Host "File already exists, skipping: $filePath" -ForegroundColor DarkMagenta
-        return $true
+        # Get the file's last modified date
+        $fileModifiedDate = (Get-Item -Path $filePath).LastWriteTime
+
+        if ($fileModifiedDate -ge $scriptModifiedDate) {
+            Write-Log "File already exists with matching modification date: $filePath"
+            Write-Host "File already exists with matching modification date, skipping: $filePath" -ForegroundColor DarkMagenta
+            return $true
+        }
+        else {
+            Write-Log "File modification date differs from script: $filePath"
+            Write-Host "File modification date differs from script, processing: $filePath" -ForegroundColor DarkYellow
+            return $false
+        }
     }
     return $false
+}
+
+function Ensure-FolderExists {
+    param (
+        [string]$folderPath
+    )
+
+    if (!(Test-Path -Path $folderPath)) {
+        New-Item -ItemType Directory -Path $folderPath | Out-Null
+        Write-Output "Folder created at $folderPath"  
+    } else {
+        Write-Output "Folder already exists at $folderPath"  
+    }
 }
 
 #################
@@ -64,9 +96,9 @@ Function Check-FileExistence {
 $Log = $true
 
 # Ensure log folder exists
-if (-not (Test-Path -Path $logfolder)) {
-    New-Item -ItemType Directory -Path $logfolder -Force
-}
+Ensure-FolderExists -folderPath "$logfolder"
+Ensure-FolderExists -folderPath "$logfolder\Logging"
+
 
 # Ensure log file exists
 if (-not (Test-Path -Path $LogFile)) {
@@ -75,11 +107,6 @@ if (-not (Test-Path -Path $LogFile)) {
 
 Write-Host "`nYour logging folder is located at: $logfolder" -ForegroundColor Green
 
-##############################
-# Graph API Variables        #
-##############################
-
-Write-Log "Next step is to obtain an Access Token with PowerShell, then use that token to call Microsoft Graph API"
 
 ####################
 # Connect to Graph #
@@ -109,15 +136,18 @@ $HeaderParams = @{
 # Export device compliance scripts#
 ###################################
 
+$ExportFolderName = "ComplianceScript"
+$JSONLogFolder = "$logfolder\$ExportFolderName"
+Ensure-FolderExists -folderPath "$JSONLogFolder"
 try {
     $complianceScriptsRequest = (Invoke-RestMethod -Headers $HeaderParams -Uri "https://graph.microsoft.com/beta/deviceManagement/deviceComplianceScripts" -Method Get)
     $complianceScripts = $complianceScriptsRequest.value
 
     foreach ($script in $complianceScripts) {
-        $filePath = "$($logfolder)\ComplianceScript - $($script.displayName).json"
+        $filePath = "$($JSONLogFolder)\ComplianceScript - $($script.displayName).json"
         
         # Skip if file already exists
-        if (Check-FileExistence -filePath $filePath) { continue }
+        if (Check-FileExistence -filePath $filePath -scriptId $script.id -token $HeaderParams.Authorization) { continue }
         
         # Export script if no duplicate exists
         $script | ConvertTo-Json -Depth 10 | Out-File $filePath
