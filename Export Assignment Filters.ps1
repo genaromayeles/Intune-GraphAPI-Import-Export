@@ -20,6 +20,7 @@ catch {
     exit
 }
 
+
 #####################
 # Functions         #
 #####################
@@ -44,16 +45,49 @@ Function Write-Log {
     }
 }
 
-# Function to check for existing files and skip if already exists
+# Function to check if the file exists and modification date matches the policy's last modified date from Graph API
 Function Check-FileExistence {
-    Param ([string]$filePath)
+    Param (
+        [string]$filePath,
+        [string]$filterId,
+        [string]$token
+    )
+
+    # Get the policy's last modified date using Graph API
+    $uri = "https://graph.microsoft.com/beta/deviceManagement/assignmentFilters/$filterId"
+    #$policyResponse = Invoke-RestMethod -Uri $uri -Headers @{ "Authorization" = "Bearer $token" } -Method Get
+    $filterResponse = Invoke-RestMethod -Headers $HeaderParams -Uri $uri -Method Get
+    $filterModifiedDate = [datetime]$filterResponse.lastModifiedDateTime
 
     if (Test-Path -Path $filePath) {
-        Write-Log "File already exists: $filePath"
-        Write-Host "File already exists, skipping: $filePath" -ForegroundColor DarkMagenta
-        return $true
+        # Get the file's last modified date
+        $fileModifiedDate = (Get-Item -Path $filePath).LastWriteTime
+
+        if ($fileModifiedDate -ge $filterModifiedDate) {
+            Write-Log "File already exists with matching modification date: $filePath"
+            Write-Host "File already exists with matching modification date, skipping: $filePath" -ForegroundColor DarkMagenta
+            return $true
+        }
+        else {
+            Write-Log "File modification date differs from filter: $filePath"
+            Write-Host "File modification date differs from filter, processing: $filePath" -ForegroundColor DarkYellow
+            return $false
+        }
     }
     return $false
+}
+
+function Ensure-FolderExists {
+    param (
+        [string]$folderPath
+    )
+
+    if (!(Test-Path -Path $folderPath)) {
+        New-Item -ItemType Directory -Path $folderPath | Out-Null
+        Write-Output "Folder created at $folderPath"  
+    } else {
+        Write-Output "Folder already exists at $folderPath"  
+    }
 }
 
 #################
@@ -64,9 +98,9 @@ Function Check-FileExistence {
 $Log = $true
 
 # Ensure log folder exists
-if (-not (Test-Path -Path $logfolder)) {
-    New-Item -ItemType Directory -Path $logfolder -Force
-}
+Ensure-FolderExists -folderPath "$logfolder"
+Ensure-FolderExists -folderPath "$logfolder\Logging"
+
 
 # Ensure log file exists
 if (-not (Test-Path -Path $LogFile)) {
@@ -75,11 +109,6 @@ if (-not (Test-Path -Path $LogFile)) {
 
 Write-Host "`nYour logging folder is located at: $logfolder" -ForegroundColor Green
 
-##############################
-# Graph API Variables        #
-##############################
-
-Write-Log "Next step is to obtain an Access Token with PowerShell, then use that token to call Microsoft Graph API"
 
 ####################
 # Connect to Graph #
@@ -105,25 +134,26 @@ $HeaderParams = @{
     'Authorization' = "Bearer $($ConnectGraph.access_token)"
 }
 
-######################################
-# Export Assignment Filters #
-######################################
+###################################
+# Export device compliance scripts#
+###################################
 
+$ExportFolderName = "Assignment Filter"
+$JSONLogFolder = "$logfolder\$ExportFolderName"
+Ensure-FolderExists -folderPath "$JSONLogFolder"
 try {
     $assignmentFiltersRequest = (Invoke-RestMethod -Headers $HeaderParams -Uri "https://graph.microsoft.com/beta/deviceManagement/assignmentFilters" -Method Get)
     $assignmentFilters = $assignmentFiltersRequest.value
 
     foreach ($filter in $assignmentFilters) {
-        $filePath = "$($logfolder)\AssignmentFilter - $($filter.displayName).json"
+        $filePath = "$($JSONLogFolder)\AssignmentFilter - $($filter.displayName).json"
         
         # Skip if file already exists
-        if (Check-FileExistence -filePath $filePath) { continue }
-        
-        # Retrieve full details of the assignment filter
-        $filterDetails = (Invoke-RestMethod -Headers $HeaderParams -Uri "https://graph.microsoft.com/beta/deviceManagement/assignmentFilters/$($filter.id)" -Method Get)
+        if (Check-FileExistence -filePath $filePath -filterId $filter.id -token $HeaderParams.Authorization) { continue }
+  
         
         # Export filter with all details if no duplicate exists
-        $filterDetails | ConvertTo-Json -Depth 10 | Out-File $filePath
+        $filter | ConvertTo-Json -Depth 10 | Out-File $filePath
         Write-Log "Exported Assignment Filter: $($filter.displayName)"
     }
 }
@@ -132,9 +162,3 @@ catch {
 }
 
 Write-Host "Assignment Filters successfully exported!" -ForegroundColor Yellow
-
-######################################
-# Additional Export Sections (Compliance Policies, Scripts, etc.) #
-######################################
-
-# (Existing sections for exporting compliance policies, device compliance scripts, device health scripts, configuration policies, ADMX files, migration reports, etc., would go here as in your original script.)
